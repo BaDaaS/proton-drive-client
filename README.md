@@ -4,9 +4,6 @@ Educational Python client for the Proton Drive API, demonstrating how Proton's
 SRP (Secure Remote Password) authentication and PGP-based encryption work under
 the hood.
 
-Built by [BaDaaS](https://badaas.be), an Applied Mathematics and Cryptography
-Lab from Belgium.
-
 ## Why
 
 Proton Drive has no official public API documentation. The only way to
