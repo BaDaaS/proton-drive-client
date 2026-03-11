@@ -161,18 +161,66 @@ class ProtonClient:
             raise ValueError(msg)
 
         # Store tokens for subsequent requests
+        self._set_session(auth_resp)
+
+        # ---- Step 5: Check if 2FA is required ----
+        # After SRP succeeds, the server may require a second factor.
+        # The 2FA field in the response indicates whether TOTP is
+        # enabled. If Enabled != 0, the client must call /auth/2fa
+        # with a TOTP code before the session is fully authorized.
+        scope = str(auth_resp.get("Scope", ""))
+        tfa_info = auth_resp.get("2FA", {})
+        tfa_enabled = 0
+        if isinstance(tfa_info, dict):
+            tfa_enabled = int(tfa_info.get("Enabled", 0))
+
+        if tfa_enabled != 0:
+            print()
+            print("  2FA is required. Call provide_2fa() with TOTP code.")
+        else:
+            print()
+            print("Authentication successful (no 2FA required).")
+
+        print(f"  UID: {self.uid}")
+        print(f"  Scope: {scope}")
+        return auth_resp
+
+    def provide_2fa(self, code: str) -> dict[str, object]:
+        """
+        Submit a TOTP 2FA code to complete authentication.
+
+        After SRP authentication succeeds, Proton may require a second
+        factor. The user must provide their 6-digit TOTP code from an
+        authenticator app.
+
+        How Proton 2FA works:
+        - After /auth returns tokens, the scope is restricted.
+        - POST /auth/2fa with the TOTP code expands the scope.
+        - The same access token is reused; no new SRP handshake.
+
+        Args:
+            code: The 6-digit TOTP code from the authenticator app.
+
+        Returns:
+            The /auth/2fa response dict with the expanded scope.
+        """
+        print("Submitting 2FA code...")
+        resp = self._api(
+            "POST",
+            "/auth/2fa",
+            {"TwoFactorCode": code},
+        )
+        scope = str(resp.get("Scope", ""))
+        print(f"  2FA accepted. Scope: {scope}")
+        return resp
+
+    def _set_session(self, auth_resp: dict[str, object]) -> None:
+        """Store session tokens from an /auth response."""
         self.uid = str(auth_resp["UID"])
         self.access_token = str(auth_resp["AccessToken"])
         self.refresh_token = str(auth_resp["RefreshToken"])
-
         self.session.headers["x-pm-uid"] = self.uid
         self.session.headers["Authorization"] = f"Bearer {self.access_token}"
-
-        print()
-        print("Authentication successful.")
-        print(f"  UID: {self.uid}")
-        print(f"  Scope: {auth_resp.get('Scope', '')}")
-        return auth_resp
 
     # ---- Drive API ----
 
