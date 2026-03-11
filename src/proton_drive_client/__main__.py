@@ -54,7 +54,7 @@ def main() -> None:
     _load_env(Path(".env"))
 
     parser = argparse.ArgumentParser(
-        description="Proton Drive API - educational SRP auth demo",
+        description="Proton Drive API - educational client",
     )
     parser.add_argument(
         "--username",
@@ -70,7 +70,12 @@ def main() -> None:
         "--list-folder",
         nargs=2,
         metavar=("SHARE_ID", "LINK_ID"),
-        help="List children of a folder",
+        help="List children of a folder (encrypted names)",
+    )
+    parser.add_argument(
+        "--decrypt",
+        action="store_true",
+        help="Decrypt file/folder names (requires PGP key chain)",
     )
     args = parser.parse_args()
 
@@ -107,6 +112,14 @@ def main() -> None:
             print(f"Response: {e.response.text[:200]}")
             sys.exit(1)
 
+    # Unlock PGP key chain if decryption is requested
+    if args.decrypt:
+        try:
+            client.unlock_keys(password)
+        except Exception as e:  # noqa: BLE001
+            print(f"\nKey unlock error: {e}")
+            sys.exit(1)
+
     if args.list_shares:
         print("\n--- Drive Shares ---")
         try:
@@ -122,22 +135,43 @@ def main() -> None:
 
     if args.list_folder:
         share_id, link_id = args.list_folder
-        print(f"\n--- Children of {link_id} ---")
-        try:
-            children = client.list_children(share_id, link_id)
-            for child in children:
-                link_type = child.get("Type", "N/A")
-                link_id_val = child.get("LinkID", "N/A")
-                name = str(child.get("Name", "N/A"))
-                if len(name) > 40:
-                    name = name[:40] + "..."
-                print(f"  LinkID: {link_id_val}")
-                print(f"  Type:   {link_type}")
-                print(f"  Name (encrypted): {name}")
-                print()
-        except requests.exceptions.HTTPError as e:
-            print(f"  Error: {e.response.status_code}")
-            print(f"  {e.response.text[:200]}")
+
+        if args.decrypt:
+            # Decrypted listing
+            print(f"\n--- Children of {link_id[:16]}... ---")
+            try:
+                children = client.list_children_decrypted(share_id, link_id)
+                for child in children:
+                    link_type = child.get("Type", "N/A")
+                    type_label = "folder" if link_type == 1 else "file"
+                    link_id_val = child.get("LinkID", "N/A")
+                    name = str(child.get("DecryptedName", "(unknown)"))
+                    print(f"  {type_label}: {name}")
+                    print(f"    LinkID: {link_id_val}")
+                    print()
+            except requests.exceptions.HTTPError as e:
+                print(f"  Error: {e.response.status_code}")
+                print(f"  {e.response.text[:200]}")
+            except ValueError as e:
+                print(f"  Error: {e}")
+        else:
+            # Raw (encrypted) listing
+            print(f"\n--- Children of {link_id} ---")
+            try:
+                children = client.list_children(share_id, link_id)
+                for child in children:
+                    link_type = child.get("Type", "N/A")
+                    link_id_val = child.get("LinkID", "N/A")
+                    name = str(child.get("Name", "N/A"))
+                    if len(name) > 40:
+                        name = name[:40] + "..."
+                    print(f"  LinkID: {link_id_val}")
+                    print(f"  Type:   {link_type}")
+                    print(f"  Name (encrypted): {name}")
+                    print()
+            except requests.exceptions.HTTPError as e:
+                print(f"  Error: {e.response.status_code}")
+                print(f"  {e.response.text[:200]}")
 
 
 if __name__ == "__main__":

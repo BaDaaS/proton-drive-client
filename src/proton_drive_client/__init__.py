@@ -8,5 +8,6 @@ Modules:
     pmhash      - Proton's custom 2048-bit hash function
     password    - Password hashing with bcrypt + PMHash
     srp         - SRP-6a (Secure Remote Password) protocol
+    crypto      - PGP key management and decryption
     client      - HTTP client for the Proton API
 """

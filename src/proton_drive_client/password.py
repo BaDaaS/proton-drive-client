@@ -112,3 +112,35 @@ def hash_password(
     #   Including the modulus in the hash binds the key to this
     #   specific SRP group, preventing cross-group attacks.
     return pmhash(hashed + modulus)
+
+
+def mailbox_password(password: bytes, key_salt: bytes) -> bytes:
+    """
+    Derive the mailbox passphrase used to unlock PGP private keys.
+
+    This is different from hash_password() which derives the SRP
+    private key x. The mailbox passphrase unlocks the user's actual
+    PGP keys stored on Proton's servers.
+
+    Steps:
+        1. Encode key_salt with bcrypt's base64 alphabet (22 chars)
+        2. bcrypt(password, "$2y$10$" + encoded_salt)
+        3. Take the last 31 bytes of the bcrypt output string
+
+    Why 31 bytes?
+        bcrypt output is 60 bytes: "$2y$10$" (7) + salt (22) + hash (31).
+        The first 29 bytes are the prefix and salt, the remaining 31
+        bytes are the actual hash output that serves as the passphrase.
+
+    Source: ProtonMail/go-srp hash.go MailboxPassword()
+
+    Args:
+        password: The user's password as UTF-8 bytes.
+        key_salt: The key salt from /keys/salts (base64-decoded).
+
+    Returns:
+        31 bytes to use as the PGP key passphrase.
+    """
+    bcrypt_salt = bcrypt_b64_encode(key_salt)[:22]
+    hashed = bcrypt.hashpw(password, b"$2y$10$" + bcrypt_salt)
+    return hashed[29:]

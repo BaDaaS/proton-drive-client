@@ -140,12 +140,10 @@ class SRPClient:
         """
         Compute the SRP-6a multiplier k = H(g, N).
 
-        Proton serializes g in big-endian and N in reversed big-endian
-        for this computation. This matches their Go/C implementations.
+        Both g and N are serialized as little-endian bytes, matching
+        Proton's official implementation (proton-python-client _pysrp.py).
         """
-        g_be = self.g.to_bytes(SRP_LEN_BYTES, "big")
-        n_be = self.N.to_bytes(SRP_LEN_BYTES, "big")
-        return _bytes_to_int(pmhash(g_be + n_be[::-1]))
+        return _hash_int(self.g, self.N)
 
     def get_ephemeral(self) -> bytes:
         """
